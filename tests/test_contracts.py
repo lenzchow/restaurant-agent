@@ -8,6 +8,7 @@ from restaurant_agent.contracts import (
     ChatResponse,
     Restaurant,
     RestaurantSearchInput,
+    Review,
 )
 from restaurant_agent.intents.models import IntentType
 
@@ -35,11 +36,16 @@ def test_restaurant_serializes_stable_fields() -> None:
         "price_per_person": 120.0,
         "distance_km": 1.2,
         "recommended_dishes": [],
+        "recommended_dish_images": [],
         "recommendation_note": None,
+        "recommendation_image_note": None,
         "opening_hours": None,
         "rating": None,
         "review_summary": None,
         "review_highlights": [],
+        "reviews": [],
+        "review_count": None,
+        "review_tags": [],
         "source_url": None,
         "source_fetched_at": None,
         "route": None,
@@ -65,6 +71,7 @@ def test_restaurant_supports_fake_metadata() -> None:
         price_per_person=180,
         distance_km=2.4,
         recommended_dishes=["寿司拼盘"],
+        recommended_dish_images=["https://img.example/sushi.jpg"],
         opening_hours="11:00-22:00",
         rating=4.6,
         review_summary="食材新鲜",
@@ -72,6 +79,30 @@ def test_restaurant_supports_fake_metadata() -> None:
 
     assert restaurant.rating == 4.6
     assert restaurant.recommended_dishes == ["寿司拼盘"]
+    assert restaurant.recommended_dish_images == ["https://img.example/sushi.jpg"]
+
+
+def test_restaurant_supports_full_review_metadata() -> None:
+    restaurant = Restaurant(
+        name="测试餐厅",
+        cuisine="粤菜",
+        address="北京市海淀区",
+        price_per_person=100,
+        distance_km=1,
+        reviews=[
+            Review(
+                content="菜品新鲜，服务很好",
+                rating=4.5,
+                tags=["服务好", "菜品新鲜"],
+                created_at="2026-10-14",
+            )
+        ],
+        review_count=12,
+        review_tags=["服务好"],
+    )
+
+    assert restaurant.reviews[0].content == "菜品新鲜，服务很好"
+    assert restaurant.review_count == 12
 
 
 def test_restaurant_search_input_supports_dianping_filters_and_pagination() -> None:

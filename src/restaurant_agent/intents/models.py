@@ -7,11 +7,13 @@ from pydantic import BaseModel, Field
 
 class IntentType(StrEnum):
     RESTAURANT_RECOMMENDATION = "restaurant_recommendation"
+    RESTAURANT_DETAILS_QUERY = "restaurant_details_query"
     DISH_RECOMMENDATION = "dish_recommendation"
     CUISINE_QUERY = "cuisine_query"
     ROUTE_QUERY = "route_query"
     OPENING_HOURS_QUERY = "opening_hours_query"
     RATING_REVIEW_QUERY = "rating_review_query"
+    REVIEW_SUMMARY_QUERY = "review_summary_query"
     GENERAL_CHAT = "general_chat"
 
 

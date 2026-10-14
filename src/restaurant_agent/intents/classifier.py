@@ -26,8 +26,10 @@ class KeywordIntentRecognizer:
         "开车多久",
         "过去要多久",
     )
+    _details_terms = ("餐厅详情", "店铺详情", "详细信息", "地址电话")
     _hours_terms = ("营业时间", "几点开门", "几点关门", "几点营业", "营业到几点")
     _rating_terms = ("评分", "评价", "口碑", "好评", "几分")
+    _review_summary_terms = ("评价总结", "评价汇总", "评论总结", "总结", "汇总")
     _restaurant_terms = (
         "餐厅",
         "饭店",
@@ -58,11 +60,13 @@ class KeywordIntentRecognizer:
         matches: list[tuple[IntentType, list[str]]] = []
         categories = (
             (IntentType.RESTAURANT_RECOMMENDATION, self._restaurant_terms),
+            (IntentType.RESTAURANT_DETAILS_QUERY, self._details_terms),
             (IntentType.ROUTE_QUERY, self._route_terms),
             (IntentType.OPENING_HOURS_QUERY, self._hours_terms),
             (IntentType.RATING_REVIEW_QUERY, self._rating_terms),
             (IntentType.DISH_RECOMMENDATION, self._dish_terms),
             (IntentType.CUISINE_QUERY, self._cuisine_terms),
+            (IntentType.REVIEW_SUMMARY_QUERY, self._review_summary_terms),
         )
         for intent, terms in categories:
             matched = self._find_terms(text, terms)
@@ -73,6 +77,15 @@ class KeywordIntentRecognizer:
             return IntentResult(intent=IntentType.GENERAL_CHAT, confidence=0.5)
 
         intents = [intent for intent, _ in matches]
+        primary_intent = intents[0]
+        if IntentType.REVIEW_SUMMARY_QUERY in intents and any(
+            term in text for term in ("总结", "汇总")
+        ):
+            primary_intent = IntentType.REVIEW_SUMMARY_QUERY
+        elif IntentType.RESTAURANT_DETAILS_QUERY in intents and any(
+            term in text for term in ("详情", "详细信息", "地址电话")
+        ):
+            primary_intent = IntentType.RESTAURANT_DETAILS_QUERY
         matched_terms = [term for _, terms in matches for term in terms]
         origin, destination = self._extract_route_points(message)
         missing_fields: list[str] = []
@@ -91,7 +104,7 @@ class KeywordIntentRecognizer:
 
         confidence = 0.98 if len(intents) == 1 else 0.9
         return IntentResult(
-            intent=intents[0],
+            intent=primary_intent,
             intents=intents,
             confidence=confidence,
             matched_terms=matched_terms,

@@ -6,6 +6,7 @@ from restaurant_agent.domain.contracts import (
     ConfirmationDecision,
     Restaurant,
     RestaurantSearchInput,
+    Review,
     ResponseStatus,
     RouteInfo,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ConfirmationDecision",
     "Restaurant",
     "RestaurantSearchInput",
+    "Review",
     "ResponseStatus",
     "RouteInfo",
 ]

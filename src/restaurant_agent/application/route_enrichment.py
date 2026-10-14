@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from typing import Any
 
@@ -17,17 +18,15 @@ class RouteEnrichmentService:
         origin: str,
         city: str | None = None,
     ) -> list[Restaurant]:
-        enriched: list[Restaurant] = []
-        for restaurant in restaurants:
+        async def enrich_one(restaurant: Restaurant) -> Restaurant:
             try:
                 route = await self.amap_client.route_between(
                     origin,
                     restaurant.address,
                     city=city,
                 )
-                enriched.append(restaurant.model_copy(update={"route": route}))
+                return restaurant.model_copy(update={"route": route})
             except Exception as exc:
-                enriched.append(
-                    restaurant.model_copy(update={"route_error": str(exc)})
-                )
-        return enriched
+                return restaurant.model_copy(update={"route_error": str(exc)})
+
+        return list(await asyncio.gather(*(enrich_one(item) for item in restaurants)))

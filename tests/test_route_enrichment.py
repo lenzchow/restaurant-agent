@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from restaurant_agent.application.route_enrichment import RouteEnrichmentService
@@ -46,3 +48,30 @@ async def test_route_enrichment_preserves_restaurants_when_one_route_fails() -> 
     assert enriched[0].route.taxi_duration_minutes == 12
     assert enriched[1].route is None
     assert enriched[1].route_error == "route unavailable"
+
+
+@pytest.mark.asyncio
+async def test_route_enrichment_queries_restaurants_concurrently() -> None:
+    started: list[str] = []
+    release = asyncio.Event()
+
+    class ConcurrentAmap:
+        async def route_between(self, origin, destination, *, city=None):
+            started.append(destination)
+            if len(started) == 2:
+                release.set()
+            await release.wait()
+            return RouteInfo(origin=origin, destination=destination)
+
+    restaurants = [
+        Restaurant(name="一", cuisine="菜", address="地址一", price_per_person=1, distance_km=1),
+        Restaurant(name="二", cuisine="菜", address="地址二", price_per_person=1, distance_km=1),
+    ]
+    enriched = await asyncio.wait_for(
+        RouteEnrichmentService(ConcurrentAmap()).enrich(
+            restaurants, origin="起点", city="北京"
+        ),
+        timeout=1,
+    )
+
+    assert [item.route.destination for item in enriched] == ["地址一", "地址二"]

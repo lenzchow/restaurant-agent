@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote, urlsplit
 
-from restaurant_agent.domain.contracts import Restaurant, RestaurantSearchInput
+from restaurant_agent.domain.contracts import Restaurant, RestaurantSearchInput, Review
 from restaurant_agent.infrastructure.browser_harness import (
     SubprocessBrowserHarness,
     validate_dianping_url,
@@ -49,9 +49,17 @@ class DianpingBrowserProvider:
         for key, value in structured.items():
             data.setdefault(key, value)
         dishes = list(data.get("recommended_dishes") or self._recommended_dishes(raw))[:10]
+        dish_images = self._image_urls(
+            data.get("recommended_dish_images") or payload.get("recommended_dish_images")
+        )[: len(dishes)]
         note = data.get("recommendation_note") or data.get("recommendation_reason")
         if len(dishes) < 10 and not note:
             note = f"大众点评页面当前只抓到{len(dishes)}道推荐菜，少于10道。"
+        image_note = None
+        if dishes and not dish_images:
+            image_note = "页面未抓取到推荐菜图片。"
+        elif dishes and len(dish_images) < len(dishes):
+            image_note = f"页面只抓取到{len(dish_images)}道推荐菜图片。"
         return Restaurant(
             name=str(data.get("name") or self._name(raw) or url_or_name),
             cuisine=str(data.get("cuisine") or self._cuisine(raw) or "未知"),
@@ -59,11 +67,16 @@ class DianpingBrowserProvider:
             price_per_person=float(data.get("price_per_person") or self._price_per_person(raw) or 0),
             distance_km=float(data.get("distance_km") or 0),
             recommended_dishes=dishes,
+            recommended_dish_images=dish_images,
             recommendation_note=note,
+            recommendation_image_note=image_note,
             opening_hours=data.get("opening_hours") or self._opening_hours(raw),
             rating=self._float_or_none(data.get("rating")) or self._rating(raw),
             review_summary=data.get("review_summary") or self._review_summary(raw),
             review_highlights=list(data.get("review_highlights") or []),
+            reviews=[Review.model_validate(item) for item in data.get("reviews", []) if isinstance(item, dict)],
+            review_count=self._int_or_none(data.get("review_count")) or self._review_count(raw),
+            review_tags=list(data.get("review_tags") or []),
             source_url=str(payload.get("url") or target_url),
             source_fetched_at=self._now(),
         )
@@ -112,7 +125,17 @@ result = js("""(() => {{
   const text = document.body.innerText || "";
   const jsonld = [...document.querySelectorAll('script[type="application/ld+json"]')]
     .map(node => node.textContent || "");
-  return JSON.stringify({{url: location.href, text, jsonld}});
+  const recommended_dish_images = [...document.querySelectorAll('img')]
+    .filter(img => {{
+      let node = img;
+      for (let index = 0; index < 5 && node; index += 1, node = node.parentElement) {{
+        if ((node.innerText || '').includes('推荐菜')) return true;
+      }}
+      return false;
+    }})
+    .map(img => img.currentSrc || img.src || img.getAttribute('data-src') || '')
+    .filter(src => /^https?:/i.test(src));
+  return JSON.stringify({{url: location.href, text, jsonld, recommended_dish_images}});
 }})()""")
 print(result)
 '''
@@ -282,6 +305,17 @@ print(result)
         return []
 
     @staticmethod
+    def _image_urls(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        urls: list[str] = []
+        for item in value:
+            url = str(item).strip()
+            if url.startswith(("http://", "https://")) and url not in urls:
+                urls.append(url)
+        return urls
+
+    @staticmethod
     def _name(text: str) -> str | None:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         for index, line in enumerate(lines[:-1]):
@@ -339,6 +373,18 @@ print(result)
             return float(value) if value is not None else None
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _int_or_none(value: Any) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _review_count(text: str) -> int | None:
+        match = re.search(r"([\d,]+)\s*条评价", text)
+        return int(match.group(1).replace(",", "")) if match else None
 
     @staticmethod
     def _now() -> str:

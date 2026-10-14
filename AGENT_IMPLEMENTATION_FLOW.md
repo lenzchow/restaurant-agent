@@ -79,7 +79,7 @@ Restaurant Agent
 - 询问菜单、价格或特色菜
 - 继续补充上一轮对话条件
 
-第一版可以只支持“查找餐厅”这一条主流程，其他意图先返回明确提示，避免 Agent 现在就覆盖过大的范围。
+当前 Agent 层已经按业务意图拆分为：餐厅详情、餐厅推荐、路线查询、推荐菜查询、评价总结；菜系、营业时间、评分评价作为可组合的子意图参与工作流。
 
 ### 主要代码位置
 
@@ -93,6 +93,8 @@ Restaurant Agent
 - 从自然语言中提取餐厅搜索条件
 - 决定缺少条件时是否需要追问
 - 决定最终结果应该如何表达
+
+当前在 Agents SDK Runner 前增加了规划层：先提取结构化搜索条件、餐厅名称和路线方式，再根据多意图生成带依赖关系的有序工作流，并把 `agent_plan` 注入模型上下文。这样模型负责理解、调用工具和表达，规划层负责稳定的业务路由。
 
 Agents SDK 在这里负责运行 Agent 循环：模型先理解用户请求，再决定是否调用工具，工具返回结果后模型继续组织回答。
 
@@ -185,7 +187,7 @@ Agent 核心是整个系统的“大脑”，但它本身不应该直接实现�
 
 - `src/restaurant_agent/providers.py`
 
-当前默认使用大众点评 Browser Provider；本地样例 provider 仍保留给离线测试。两者都通过统一搜索接口提供餐厅结果，不需要修改 Agent 的主要流程。
+当前默认使用大众点评 Browser Provider；本地样例 provider 仍保留给离线测试。两者都通过统一搜索接口提供餐厅结果，不需要修改 Agent 的主要流程。推荐菜、评价摘要、营业时间和评分查询通过详情工具复用 Provider 数据；Provider 没有提供的字段必须明确说明未接入，不能由模型编造。
 
 ## 七、数据源和 Provider 层
 
@@ -288,13 +290,11 @@ src/restaurant_agent/adapters/
 
 ### 会话状态
 
-当前只接收 `conversation_id`，还没有持久化完整对话历史。
+当前使用 Agents SDK `SQLiteSession` 保存同一 `conversation_id` 的 Agent 对话历史，默认是进程内存模式。
 
-后续如果需要连续对话，就需要增加：
+如果需要跨进程或服务重启保留对话，可以配置 `AGENT_SESSION_DB_PATH`，后续再替换为 Redis 或其他 Session 实现：
 
 - 会话历史存储
-- 用户偏好存储
-- 上一轮搜索条件
 - Agent 状态恢复
 
 例如用户先说“帮我找附近的日料”，下一句说“预算控制在 200 元以内”，系统需要把两句话关联到同一个会话中。
@@ -330,7 +330,7 @@ Agent 可能遇到：
 4. **API 测试**：HTTP 状态码和 JSON 响应格式是否符合约定。
 5. **真实调用测试**：有 API Key 后，再单独验证 Responses API 和真实数据源。
 
-当前离线测试不调用 OpenAI，也不调用外部餐厅服务。这样可以先稳定代码结构，再接入真实数据源。
+当前离线测试不调用 OpenAI，也不调用外部餐厅服务。`tests/test_responses_e2e.py` 提供真实 Responses API 联调，默认跳过，设置 `RUN_RESPONSES_E2E=1` 后才执行；真实数据源和高德 MCP 仍需单独联调。
 
 ## 十三、当前项目的代码对应关系
 
@@ -339,6 +339,7 @@ Agent 可能遇到：
 | HTTP 入口 | `src/restaurant_agent/api.py` | 接收请求、返回响应 |
 | 数据契约 | `src/restaurant_agent/contracts.py` | Pydantic 请求、响应和工具参数 |
 | Agent 核心 | `src/restaurant_agent/agent.py` | 意图理解、工具调用、结果生成 |
+| Agent 规划层 | `src/restaurant_agent/application/agent_planning.py` | 参数提取、工具路由和多意图动作规划 |
 | 数据 Provider | `src/restaurant_agent/providers.py` | 搜索餐厅数据 |
 | 配置 | `src/restaurant_agent/settings.py` | 环境变量和模型配置 |
 | 平台适配器 | 尚未创建 | 飞书、网页或其他平台接入 |

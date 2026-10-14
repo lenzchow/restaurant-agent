@@ -28,6 +28,10 @@ async def test_provider_limits_recommended_dishes_to_ten_and_explains_shortfall(
                 "cuisine": "Japanese",
                 "price_per_person": 180,
                 "recommended_dishes": ["寿司", "烤鳗鱼"],
+                "recommended_dish_images": [
+                    "https://img.example/sushi.jpg",
+                    "https://img.example/eel.jpg",
+                ],
                 "recommendation_total": 2,
                 "recommendation_reason": "页面只展示2道推荐菜",
                 "opening_hours": "11:30-21:30",
@@ -44,6 +48,10 @@ async def test_provider_limits_recommended_dishes_to_ten_and_explains_shortfall(
     )
 
     assert restaurant.recommended_dishes == ["寿司", "烤鳗鱼"]
+    assert restaurant.recommended_dish_images == [
+        "https://img.example/sushi.jpg",
+        "https://img.example/eel.jpg",
+    ]
     assert restaurant.recommendation_note == "页面只展示2道推荐菜"
     assert restaurant.rating == 4.7
     assert restaurant.source_url == "https://www.dianping.com/shop/example"
@@ -107,6 +115,55 @@ def test_search_item_parser_maps_dianping_card_fields() -> None:
     assert restaurant.recommended_dishes == ["油焖鸡", "黑三剁", "小锅米线"]
 
 
+@pytest.mark.asyncio
+async def test_provider_reports_missing_recommended_dish_images() -> None:
+    harness = FakeHarness(
+        {
+            "restaurant": {
+                "name": "没有图片的餐厅",
+                "recommended_dishes": ["招牌菜"],
+                "recommended_dish_images": [],
+            }
+        }
+    )
+
+    restaurant = await DianpingBrowserProvider(harness).get_restaurant_details(
+        "没有图片的餐厅", city="北京"
+    )
+
+    assert restaurant.recommended_dish_images == []
+    assert restaurant.recommendation_image_note == "页面未抓取到推荐菜图片。"
+
+
+@pytest.mark.asyncio
+async def test_provider_maps_full_review_metadata() -> None:
+    harness = FakeHarness(
+        {
+            "restaurant": {
+                "name": "评价餐厅",
+                "reviews": [
+                    {
+                        "content": "菜品新鲜，服务很好",
+                        "rating": 4.5,
+                        "tags": ["服务好", "菜品新鲜"],
+                        "created_at": "2026-10-14",
+                    }
+                ],
+                "review_count": 18,
+                "review_tags": ["服务好", "菜品新鲜"],
+            }
+        }
+    )
+
+    restaurant = await DianpingBrowserProvider(harness).get_restaurant_details(
+        "评价餐厅", city="北京"
+    )
+
+    assert restaurant.review_count == 18
+    assert restaurant.review_tags == ["服务好", "菜品新鲜"]
+    assert restaurant.reviews[0].content == "菜品新鲜，服务很好"
+
+
 def test_recommended_dishes_skip_dianping_helper_rows() -> None:
     text = """推荐菜
 查看更多
@@ -133,6 +190,15 @@ def test_search_script_selects_shop_title_links_only() -> None:
 
     assert 'a[data-click-name="shop_title_click"]' in script
     assert 'a[href*="/shop/"]' not in script
+
+
+def test_detail_script_extracts_recommended_dish_image_urls() -> None:
+    script = DianpingBrowserProvider._detail_script(
+        "https://www.dianping.com/shop/example"
+    )
+
+    assert "recommended_dish_images" in script
+    assert "currentSrc" in script
 
 
 def test_search_script_resolves_city_filters_and_sort_from_page_links() -> None:

@@ -4,11 +4,13 @@ A platform-neutral restaurant-finding agent built with FastAPI, Pydantic, the Op
 
 ## Current MVP
 
-The project exposes a generic HTTP API. It does not contain Feishu-specific code, so a Feishu bot, web UI, Slack app, or another platform can be added later as an adapter around the same request and response contracts.
+The project exposes a generic HTTP API and includes a Feishu adapter, web UI, and CLI entry point. The Agent core still does not depend on Feishu; each platform converts to and from the same request and response contracts. See `FEISHU_SETUP.md` for the Feishu setup steps.
 
 The sample provider remains available for offline tests. The default configuration now uses the real Dianping browser provider when Chrome and browser-harness are available.
 
 The intent layer supports restaurant search/filtering, dish recommendations, cuisine queries, route queries, opening-hours queries, and rating/review queries. It can return multiple intents together, ask for missing route endpoints, and report contradictory budget constraints.
+
+The Agent layer builds an execution plan before the model run: it extracts search parameters and routes multi-intent requests to ordered actions such as restaurant search, detail lookup, recommended dishes, review summary, and route lookup. Conversation history is managed by the Agents SDK `SQLiteSession`; the plan is passed to the runner as structured context. Native input/output guardrails reject malformed workflow payloads and unusable final responses.
 
 The `DianpingBrowserProvider` uses the local `browser-harness` session for Dianping-only restaurant search and detail pages. It resolves the selected city, cuisine, neighborhood, and sort links from the live Dianping page, so it is not limited to Beijing or a fixed code table. Supported sort intents include smart, good reviews, popularity, taste, most reviews, best environment, best service, booking priority, and per-person price high/low. The `page` and `limit` fields control pagination and returned card count. It does not implement real Dianping ranking-list scraping, and it does not persist browser cookies or tokens. Detail extraction limits recommended dishes to 10 and records a note when fewer are visible.
 
@@ -34,13 +36,14 @@ MCP_BEARER_TOKEN=
 
 RESTAURANT_PROVIDER=dianping
 BROWSER_HARNESS_EXECUTABLE=browser-harness
+AGENT_SESSION_DB_PATH=:memory:
 ```
 
 The Amap key is optional only when it is already embedded in `AMAP_MCP_URL`. Do not commit real keys or bearer tokens. The agent discovers the tools exposed by the MCP server at runtime; this project does not hard-code provider-specific tool names.
 
 When Amap MCP is configured, the application business client can search a place, load its POI details and coordinates, query driving/transit routes, generate a taxi URI, and normalize subway lines and route durations into `RouteInfo`. The Amap taxi tool returns a launch URI rather than a minute estimate, so the current taxi minute field uses the driving duration returned for the same origin and destination.
 
-When a search request includes an `origin`, the service enriches every Dianping result with Amap route data in sequence: place lookup, driving route, taxi estimate reference, public-transit duration, and subway/bus lines. A route failure is stored on that restaurant as `route_error` instead of discarding the restaurant result.
+When a search request includes an `origin`, the service enriches every Dianping result with Amap route data concurrently: place lookup, driving route, taxi estimate reference, public-transit duration, and subway/bus lines. A route failure is stored on that restaurant as `route_error` instead of discarding the restaurant result.
 
 ## Run
 

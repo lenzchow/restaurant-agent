@@ -11,12 +11,14 @@ from restaurant_agent.intents.models import IntentType
     [
         ("帮我找一家适合晚餐的馆子", IntentType.RESTAURANT_RECOMMENDATION),
         ("我想找日料", IntentType.RESTAURANT_RECOMMENDATION),
+        ("查询全聚德餐厅的详细信息", IntentType.RESTAURANT_DETAILS_QUERY),
         ("这家店有什么推荐菜？", IntentType.DISH_RECOMMENDATION),
         ("当前榜单上有哪些菜系？", IntentType.CUISINE_QUERY),
         ("帮我筛选北京菜，按好评排序", IntentType.RESTAURANT_RECOMMENDATION),
         ("帮我查从学校到这家店的路线", IntentType.ROUTE_QUERY),
         ("这家店几点关门？", IntentType.OPENING_HOURS_QUERY),
         ("这家店评分和评价怎么样？", IntentType.RATING_REVIEW_QUERY),
+        ("请总结这家餐厅的评价", IntentType.REVIEW_SUMMARY_QUERY),
     ],
 )
 def test_keyword_recognizer_classifies_restaurant_intents(

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Restaurant Agent</title>
+  <style>
+    body { max-width: 760px; margin: 40px auto; padding: 0 16px; font: 16px/1.6 system-ui, sans-serif; }
+    #messages { min-height: 320px; border: 1px solid #ddd; padding: 16px; white-space: pre-wrap; }
+    form { display: flex; gap: 8px; margin-top: 16px; }
+    input { flex: 1; padding: 10px; }
+    button { padding: 10px 18px; }
+  </style>
+</head>
+<body>
+  <h1>Restaurant Agent</h1>
+  <div id="messages">请输入你的餐厅需求。</div>
+  <form id="chat-form">
+    <input id="message" autocomplete="off" placeholder="例如：在北京找一家日料">
+    <button type="submit">发送</button>
+  </form>
+  <script>
+    const conversationId = crypto.randomUUID();
+    const messages = document.querySelector('#messages');
+    document.querySelector('#chat-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.querySelector('#message');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      const response = await fetch('/v1/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({conversation_id: conversationId, user_id: 'web-user', message})
+      });
+      const data = await response.json();
+      const block = document.createElement('div');
+      block.textContent = data.message || '';
+      for (const restaurant of (data.recommendations || [])) {
+        const title = document.createElement('h3');
+        title.textContent = restaurant.name;
+        block.appendChild(title);
+        const images = restaurant.recommended_dish_images || [];
+        for (const imageUrl of images) {
+          const image = document.createElement('img');
+          image.src = imageUrl;
+          image.alt = `${restaurant.name} 推荐菜图片`;
+          image.style.maxWidth = '240px';
+          image.style.marginRight = '8px';
+          block.appendChild(image);
+        }
+      }
+      messages.appendChild(document.createElement('hr'));
+      messages.appendChild(block);
+    });
+  </script>
+</body>
+</html>

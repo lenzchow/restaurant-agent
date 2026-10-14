@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from restaurant_agent.application.service import RestaurantAgentService
+from restaurant_agent.adapters.feishu import FeishuClient
 from restaurant_agent.config.settings import Settings
 from restaurant_agent.domain.contracts import ChatRequest, ChatResponse
 from restaurant_agent.infrastructure.amap_mcp import (
@@ -17,6 +18,7 @@ from restaurant_agent.infrastructure.browser_harness import SubprocessBrowserHar
 from restaurant_agent.infrastructure.dianping_provider import DianpingBrowserProvider
 from restaurant_agent.application.route_enrichment import RouteEnrichmentService
 from restaurant_agent.infrastructure.providers import SampleRestaurantProvider
+from restaurant_agent.web import create_platform_router
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,14 @@ def create_app(service: Any | None = None) -> FastAPI:
     settings = Settings()
     agent_service = service or create_default_agent_service(settings)
     app = FastAPI(title="Restaurant Agent API", version="0.1.0")
+    feishu_client = None
+    if settings.feishu_app_id and settings.feishu_app_secret:
+        feishu_client = FeishuClient(
+            settings.feishu_app_id,
+            settings.feishu_app_secret,
+            base_url=settings.feishu_api_base_url,
+        )
+    app.include_router(create_platform_router(agent_service, feishu_client))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
