@@ -41,6 +41,7 @@ class WorkflowPlan(BaseModel):
 class AgentParameterExtraction(BaseModel):
     search_request: RestaurantSearchInput = Field(default_factory=RestaurantSearchInput)
     restaurant_name: str | None = None
+    restaurant_url: str | None = None
     route_origin: str | None = None
     route_destination: str | None = None
     route_modes: list[str] = Field(default_factory=list)
@@ -102,7 +103,8 @@ class AgentParameterExtractor:
         route_modes = self._route_modes(text)
         return AgentParameterExtraction(
             search_request=RestaurantSearchInput(**values),
-            restaurant_name=self._restaurant_name(text),
+            restaurant_name=None if self._restaurant_url(text) else self._restaurant_name(text),
+            restaurant_url=self._restaurant_url(text),
             route_origin=origin,
             route_destination=destination,
             route_modes=route_modes,
@@ -159,6 +161,11 @@ class AgentParameterExtractor:
             return None
         name = match.group(1).strip()
         return name or None
+
+    @staticmethod
+    def _restaurant_url(text: str) -> str | None:
+        match = re.search(r"https?://(?:www\.)?dianping\.com/shop/[A-Za-z0-9_-]+", text)
+        return match.group(0) if match else None
 
 
 class ToolRouter:

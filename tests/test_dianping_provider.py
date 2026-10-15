@@ -164,6 +164,20 @@ async def test_provider_maps_full_review_metadata() -> None:
     assert restaurant.reviews[0].content == "菜品新鲜，服务很好"
 
 
+@pytest.mark.asyncio
+async def test_provider_marks_shell_page_as_partial_instead_of_live_complete() -> None:
+    harness = FakeHarness(
+        {"url": "https://www.dianping.com/shop/example", "text": "©美团网 meituan.com"}
+    )
+
+    restaurant = await DianpingBrowserProvider(harness).get_restaurant_details(
+        "https://www.dianping.com/shop/example", city="北京"
+    )
+
+    assert restaurant.data_source_status == "partial"
+    assert restaurant.recommendation_note is not None
+
+
 def test_recommended_dishes_skip_dianping_helper_rows() -> None:
     text = """推荐菜
 查看更多
@@ -244,3 +258,9 @@ def test_detail_text_parsers_extract_live_page_fields() -> None:
     assert DianpingBrowserProvider._price_per_person(text) == 125
     assert DianpingBrowserProvider._opening_hours(text) == "11:00-14:00, 17:00-21:00"
     assert DianpingBrowserProvider._rating(text) == 3.9
+
+
+def test_address_parser_ignores_meituan_footer() -> None:
+    text = "©美团网 meituan.com 京ICP证070791号 京公网安备 11000002002052号"
+
+    assert DianpingBrowserProvider._address(text) is None

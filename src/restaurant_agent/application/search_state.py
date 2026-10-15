@@ -17,7 +17,7 @@ class SearchConditionStatus(StrEnum):
 class SearchConditionUpdate(BaseModel):
     status: SearchConditionStatus
     current_conditions: RestaurantSearchInput
-    candidates: dict[str, list[object]] = Field(default_factory=dict)
+    candidates: dict[str, list[str]] = Field(default_factory=dict)
     clarifying_question: str | None = None
 
 
@@ -93,16 +93,16 @@ class SearchConditionManager:
         return f"当前搜索条件为：\n{body}\n是否按以上条件搜索？"
 
     @classmethod
-    def _candidates(cls, message: str) -> dict[str, list[object]]:
-        candidates: dict[str, list[object]] = {}
+    def _candidates(cls, message: str) -> dict[str, list[str]]:
+        candidates: dict[str, list[str]] = {}
         if any(term in message for term in cls._ambiguous_budget_terms):
-            candidates["max_budget"] = [100, 200]
+            candidates["max_budget"] = ["100", "200"]
         if any(term in message for term in cls._ambiguous_distance_terms):
-            candidates["max_distance_km"] = [3, 5, 10]
+            candidates["max_distance_km"] = ["3", "5", "10"]
         return candidates
 
     @staticmethod
-    def _candidate_question(candidates: dict[str, list[object]]) -> str:
+    def _candidate_question(candidates: dict[str, list[str]]) -> str:
         labels = {"max_budget": "人均预算", "max_distance_km": "距离"}
         choices = []
         for field, values in candidates.items():

@@ -11,7 +11,7 @@ def test_ambiguous_budget_returns_choices_instead_of_silent_value() -> None:
     update = manager.update("我想找一家不要太贵的日料")
 
     assert update.status is SearchConditionStatus.NEEDS_CLARIFICATION
-    assert update.candidates["max_budget"] == [100, 200]
+    assert update.candidates["max_budget"] == ["100", "200"]
     assert "100" in update.clarifying_question
     assert "200" in update.clarifying_question
 

@@ -48,6 +48,8 @@ def test_restaurant_serializes_stable_fields() -> None:
         "review_tags": [],
         "source_url": None,
         "source_fetched_at": None,
+        "data_source": "unknown",
+        "data_source_status": "unknown",
         "route": None,
         "route_error": None,
     }
@@ -103,6 +105,21 @@ def test_restaurant_supports_full_review_metadata() -> None:
 
     assert restaurant.reviews[0].content == "菜品新鲜，服务很好"
     assert restaurant.review_count == 12
+
+
+def test_restaurant_marks_each_field_source() -> None:
+    restaurant = Restaurant(
+        name="真实餐厅",
+        cuisine="日料",
+        address="北京市海淀区",
+        price_per_person=100,
+        distance_km=1,
+        data_source="dianping",
+        data_source_status="live",
+    )
+
+    assert restaurant.data_source == "dianping"
+    assert restaurant.data_source_status == "live"
 
 
 def test_restaurant_search_input_supports_dianping_filters_and_pagination() -> None:

@@ -93,3 +93,22 @@ def test_client_extracts_taxi_uri_from_plain_text() -> None:
     )
 
     assert uri == "amapuri://drive/takeTaxi?dname=test"
+
+
+@pytest.mark.asyncio
+async def test_route_between_retries_transient_tool_failure() -> None:
+    calls = 0
+    base = FakeMCPServer()
+
+    class RetryServer:
+        async def call_tool(self, name: str, arguments: dict[str, object]):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise TimeoutError("temporary timeout")
+            return await base.call_tool(name, arguments)
+
+    route = await AmapMCPClient(RetryServer()).route_between("起点", "终点")
+
+    assert route.destination == "Sakura Table"
+    assert calls > 1

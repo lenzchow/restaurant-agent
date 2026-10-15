@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ from restaurant_agent.agent import RestaurantAgentService
 from restaurant_agent.contracts import (
     ChatRequest,
     ChatResponse,
+    Restaurant,
     RestaurantSearchInput,
     RouteInfo,
 )
@@ -399,6 +401,85 @@ async def test_ambiguous_search_condition_returns_choices_before_search() -> Non
         ChatRequest(user_id="user-test", message="找一家不要太贵的日料")
     )
 
-    assert response.condition_candidates == {"max_budget": [100, 200]}
+    assert response.condition_candidates.model_dump(exclude_defaults=True) == {
+        "max_budget": ["100", "200"]
+    }
     assert "100" in response.message
     assert "200" in response.message
+
+
+@pytest.mark.asyncio
+async def test_service_batches_restaurant_details_concurrently() -> None:
+    class FakeDianping:
+        async def get_restaurant_details(self, url_or_name, *, city=None):
+            return Restaurant(
+                name=url_or_name,
+                cuisine="日料",
+                address=f"{url_or_name}地址",
+                price_per_person=100,
+                distance_km=1,
+            )
+
+    service = RestaurantAgentService(
+        provider=SampleRestaurantProvider(),
+        dianping_provider=FakeDianping(),
+    )
+
+    results = await service.get_restaurant_details_batch(
+        ["甲店", "乙店"], city="北京"
+    )
+
+    assert [item.name for item in results] == ["甲店", "乙店"]
+
+
+@pytest.mark.asyncio
+async def test_service_retains_workflow_context_for_follow_up_steps() -> None:
+    async def fake_runner(*args, **kwargs):
+        return SimpleNamespace(
+            final_output=ChatResponse(
+                conversation_id="context-test",
+                message="已完成",
+                recommendations=[
+                    Restaurant(
+                        name="测试店",
+                        cuisine="日料",
+                        address="地址",
+                        price_per_person=100,
+                        distance_km=1,
+                        data_source="sample",
+                        data_source_status="sample",
+                    )
+                ],
+            )
+        )
+
+    service = RestaurantAgentService(
+        provider=SampleRestaurantProvider(), runner=fake_runner
+    )
+    await service.answer(
+        ChatRequest(
+            conversation_id="context-test",
+            user_id="user-test",
+            message="帮我找一家日料",
+        )
+    )
+
+    context = service.get_workflow_context("context-test")
+
+    assert context["recommendations"][0]["name"] == "测试店"
+
+
+def test_service_asks_route_scope_for_multi_restaurant_request() -> None:
+    service = RestaurantAgentService(provider=SampleRestaurantProvider())
+
+    response = asyncio.run(
+        service.answer(
+            ChatRequest(
+                user_id="user-test",
+                message="推荐10家日料，并查询全部餐厅路线",
+            )
+        )
+    )
+
+    assert "全部餐厅" in response.message
+    assert "指定一家" in response.message

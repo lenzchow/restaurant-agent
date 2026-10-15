@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -24,11 +25,20 @@ class AmapMCPClient:
     def __init__(self, server: Any) -> None:
         self.server = server
 
+    async def _call_tool(self, name: str, arguments: dict[str, object]) -> Any:
+        for attempt in range(2):
+            try:
+                return await self.server.call_tool(name, arguments)
+            except (TimeoutError, ConnectionError):
+                if attempt == 1:
+                    raise
+                await asyncio.sleep(0)
+
     async def search_place(self, query: str, city: str | None = None) -> PlaceResult:
         arguments: dict[str, object] = {"keywords": query}
         if city:
             arguments.update({"city": city, "citylimit": True})
-        result = await self.server.call_tool("maps_text_search", arguments)
+        result = await self._call_tool("maps_text_search", arguments)
         payload = self._payload(result)
         pois = payload.get("pois", [])
         if not pois:
@@ -38,7 +48,7 @@ class AmapMCPClient:
         detail: dict[str, Any] = {}
         if not place.get("location") and poi_id:
             detail = self._payload(
-                await self.server.call_tool("maps_search_detail", {"id": poi_id})
+                await self._call_tool("maps_search_detail", {"id": poi_id})
             )
         return PlaceResult(
             name=str(detail.get("name") or place.get("name") or query),
@@ -66,19 +76,19 @@ class AmapMCPClient:
             raise ValueError("Amap place search did not return coordinates")
 
         driving = self._payload(
-            await self.server.call_tool(
+            await self._call_tool(
                 "maps_direction_driving",
                 {"origin": origin.location, "destination": destination.location},
             )
         )
         taxi = self._payload(
-            await self.server.call_tool(
+            await self._call_tool(
                 "maps_schema_take_taxi",
                 self._taxi_arguments(origin, destination),
             )
         )
         transit = self._payload(
-            await self.server.call_tool(
+            await self._call_tool(
                 "maps_direction_transit_integrated",
                 {
                     "origin": origin.location,

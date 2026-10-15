@@ -73,10 +73,11 @@ class FeishuAdapter:
             preview = "\n".join(f"{label}：{value}" for label, value in fields if value)
             if preview and preview not in text:
                 text = f"{text}\n{preview}"
-        if response.condition_candidates:
+        candidates = response.condition_candidates.model_dump(exclude_defaults=True)
+        if candidates:
             choices = "；".join(
                 f"{field}: {', '.join(map(str, values))}"
-                for field, values in response.condition_candidates.items()
+                for field, values in candidates.items()
             )
             text = f"{text}\n可选条件：{choices}"
         return {"msg_type": "text", "content": {"text": text}}

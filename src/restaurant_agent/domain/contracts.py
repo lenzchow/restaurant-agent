@@ -60,6 +60,8 @@ class Restaurant(BaseModel):
     review_tags: list[str] = Field(default_factory=list)
     source_url: str | None = None
     source_fetched_at: str | None = None
+    data_source: str = "unknown"
+    data_source_status: str = "unknown"
     route: RouteInfo | None = None
     route_error: str | None = None
 
@@ -74,6 +76,11 @@ class RestaurantSearchInput(BaseModel):
     party_size: int | None = Field(default=None, ge=1)
     page: int = Field(default=1, ge=1, le=50)
     limit: int = Field(default=10, ge=1, le=20)
+
+
+class ConditionCandidates(BaseModel):
+    max_budget: list[str] = Field(default_factory=list)
+    max_distance_km: list[str] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
@@ -105,7 +112,7 @@ class ChatResponse(BaseModel):
     clarifying_question: str | None = None
     conflicts: list[str] = Field(default_factory=list)
     search_conditions: RestaurantSearchInput | None = None
-    condition_candidates: dict[str, list[object]] = Field(default_factory=dict)
+    condition_candidates: ConditionCandidates = Field(default_factory=ConditionCandidates)
     search_confirmation_required: bool = False
     recommendations: list[Restaurant] = Field(default_factory=list)
     route: RouteInfo | None = None

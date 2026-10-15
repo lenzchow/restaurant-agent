@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from collections.abc import Awaitable, Callable
@@ -69,6 +70,7 @@ class RestaurantAgentService:
             "AGENT_SESSION_DB_PATH", ":memory:"
         )
         self._sessions: dict[str, SQLiteSession] = {}
+        self._workflow_context: dict[str, dict[str, Any]] = {}
         self.agent = Agent(
             name="Restaurant finder",
             model=model or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -129,6 +131,32 @@ class RestaurantAgentService:
         if origin and self.route_enrichment:
             restaurant = (await self.route_enrichment.enrich([restaurant], origin=origin, city=city))[0]
         return restaurant
+
+    async def get_restaurant_details_batch(
+        self,
+        urls_or_names: list[str],
+        *,
+        city: str | None = None,
+        origin: str | None = None,
+    ) -> list[Restaurant]:
+        async def load_one(value: str) -> Restaurant:
+            try:
+                return await self.get_restaurant_details(
+                    value, city=city, origin=origin
+                )
+            except Exception as exc:
+                return Restaurant(
+                    name=value,
+                    cuisine="未知",
+                    address="未获取到地址",
+                    price_per_person=0,
+                    distance_km=0,
+                    route_error=str(exc),
+                    data_source="dianping",
+                    data_source_status="error",
+                )
+
+        return list(await asyncio.gather(*(load_one(value) for value in urls_or_names[:10])))
 
     async def get_recommended_dishes(
         self, url_or_name: str, *, city: str | None = None
@@ -269,6 +297,14 @@ class RestaurantAgentService:
                     "confidence": 0.8,
                 }
             )
+        if self._needs_route_scope_question(request.message, intent, search_request):
+            return ChatResponse(
+                conversation_id=request.conversation_id,
+                message="路线查询范围需要确认：是查询全部餐厅，还是指定一家餐厅？",
+                intent=intent.intent,
+                intents=intent.intents,
+                clarifying_question="请回复‘全部餐厅’或指定餐厅名称。",
+            )
         if intent.missing_fields or intent.conflicts:
             return ChatResponse(
                 conversation_id=request.conversation_id,
@@ -326,6 +362,7 @@ class RestaurantAgentService:
             intent,
             search_request=search_request,
             restaurant_name=extraction.restaurant_name,
+            restaurant_url=extraction.restaurant_url,
             route_modes=extraction.route_modes,
         )
 
@@ -336,6 +373,7 @@ class RestaurantAgentService:
         *,
         search_request: RestaurantSearchInput | None = None,
         restaurant_name: str | None = None,
+        restaurant_url: str | None = None,
         route_modes: list[str] | None = None,
     ) -> ChatResponse:
         route = None
@@ -357,6 +395,7 @@ class RestaurantAgentService:
                 route,
                 search_request=search_request,
                 restaurant_name=restaurant_name,
+                restaurant_url=restaurant_url,
                 route_modes=route_modes,
             )
         else:
@@ -367,6 +406,7 @@ class RestaurantAgentService:
                     route,
                     search_request=search_request,
                     restaurant_name=restaurant_name,
+                    restaurant_url=restaurant_url,
                     route_modes=route_modes,
                 )
         output = result.final_output
@@ -376,14 +416,25 @@ class RestaurantAgentService:
                 updates["intents"] = intent.intents
             if output.route is None and route is not None:
                 updates["route"] = route
-            return output.model_copy(update=updates)
-        return ChatResponse(
-            conversation_id=request.conversation_id,
-            message=str(output),
-            intent=intent.intent,
-            intents=intent.intents,
-            route=route,
-        )
+            response = output.model_copy(update=updates)
+        else:
+            response = ChatResponse(
+                conversation_id=request.conversation_id,
+                message=str(output),
+                intent=intent.intent,
+                intents=intent.intents,
+                route=route,
+            )
+        self._workflow_context[request.conversation_id] = {
+            "intent": intent.model_dump(),
+            "search_request": search_request.model_dump() if search_request else None,
+            "route": route.model_dump() if route else None,
+            "recommendations": [item.model_dump() for item in response.recommendations],
+        }
+        return response
+
+    def get_workflow_context(self, conversation_id: str) -> dict[str, Any]:
+        return dict(self._workflow_context.get(conversation_id, {}))
 
     @staticmethod
     def _text_decision(message: str) -> ConfirmationDecision | None:
@@ -408,6 +459,21 @@ class RestaurantAgentService:
         }
         return bool(live_intents.intersection(intent.intents))
 
+    @staticmethod
+    def _needs_route_scope_question(
+        message: str,
+        intent: IntentResult,
+        search_request: RestaurantSearchInput,
+    ) -> bool:
+        if not {
+            IntentType.ROUTE_QUERY,
+            IntentType.RESTAURANT_RECOMMENDATION,
+        }.issubset(set(intent.intents)):
+            return False
+        normalized = message.casefold()
+        multi = any(term in normalized for term in ("全部", "所有", "每家"))
+        return multi or (search_request.limit > 1 and "路线" in normalized)
+
     async def _run(
         self,
         request: ChatRequest,
@@ -416,6 +482,7 @@ class RestaurantAgentService:
         *,
         search_request: RestaurantSearchInput | None = None,
         restaurant_name: str | None = None,
+        restaurant_url: str | None = None,
         route_modes: list[str] | None = None,
     ) -> Any:
         payload = request.model_dump()
@@ -428,6 +495,7 @@ class RestaurantAgentService:
             "route_origin": intent.get("route_origin"),
             "route_destination": intent.get("route_destination"),
             "restaurant_name": restaurant_name,
+            "restaurant_url": restaurant_url,
             "search_request": (
                 search_request.model_dump() if search_request is not None else None
             ),

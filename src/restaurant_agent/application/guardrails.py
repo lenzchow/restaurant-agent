@@ -62,7 +62,12 @@ async def restaurant_output_guardrail(
     """Ensure the final response is typed and contains a usable message."""
 
     valid = isinstance(agent_output, ChatResponse) and bool(agent_output.message.strip())
+    if valid and agent_output.recommendations:
+        valid = all(
+            restaurant.data_source_status in {"live", "partial", "sample"}
+            for restaurant in agent_output.recommendations
+        )
     return GuardrailFunctionOutput(
         tripwire_triggered=not valid,
-        output_info=None if valid else {"reason": "empty_or_untyped_response"},
+        output_info=None if valid else {"reason": "empty_or_untyped_or_unlabelled_response"},
     )

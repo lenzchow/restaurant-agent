@@ -60,6 +60,19 @@ class DianpingBrowserProvider:
             image_note = "页面未抓取到推荐菜图片。"
         elif dishes and len(dish_images) < len(dishes):
             image_note = f"页面只抓取到{len(dish_images)}道推荐菜图片。"
+        opening_hours = data.get("opening_hours") or self._opening_hours(raw)
+        rating = self._float_or_none(data.get("rating")) or self._rating(raw)
+        review_summary = data.get("review_summary") or self._review_summary(raw)
+        reviews = [
+            Review.model_validate(item)
+            for item in data.get("reviews", [])
+            if isinstance(item, dict)
+        ]
+        has_detail = bool(
+            dishes or opening_hours or rating is not None or review_summary or reviews
+        )
+        if not has_detail:
+            note = "大众点评详情页当前未返回可用的餐厅详情，推荐菜、评分和评价暂时无法确认。"
         return Restaurant(
             name=str(data.get("name") or self._name(raw) or url_or_name),
             cuisine=str(data.get("cuisine") or self._cuisine(raw) or "未知"),
@@ -70,15 +83,17 @@ class DianpingBrowserProvider:
             recommended_dish_images=dish_images,
             recommendation_note=note,
             recommendation_image_note=image_note,
-            opening_hours=data.get("opening_hours") or self._opening_hours(raw),
-            rating=self._float_or_none(data.get("rating")) or self._rating(raw),
-            review_summary=data.get("review_summary") or self._review_summary(raw),
+            opening_hours=opening_hours,
+            rating=rating,
+            review_summary=review_summary,
             review_highlights=list(data.get("review_highlights") or []),
-            reviews=[Review.model_validate(item) for item in data.get("reviews", []) if isinstance(item, dict)],
+            reviews=reviews,
             review_count=self._int_or_none(data.get("review_count")) or self._review_count(raw),
             review_tags=list(data.get("review_tags") or []),
             source_url=str(payload.get("url") or target_url),
             source_fetched_at=self._now(),
+            data_source="dianping",
+            data_source_status="live" if has_detail else "partial",
         )
 
     async def search_restaurants(self, request: RestaurantSearchInput) -> list[Restaurant]:
@@ -151,23 +166,21 @@ print(result)
         sort: str = "smart",
         page: int = 1,
     ) -> str:
-        filters = json.dumps(
-            {
-                "city": city,
-                "cuisine": {"日料": "日本菜"}.get(cuisine or "", cuisine),
-                "location": location,
-                "sort": DianpingBrowserProvider._sort_labels.get(sort),
-                "page": page,
-            },
-            ensure_ascii=False,
-        )
+        filters_data = {
+            "city": city,
+            "cuisine": {"日料": "日本菜"}.get(cuisine or "", cuisine),
+            "location": location,
+            "sort": DianpingBrowserProvider._sort_labels.get(sort),
+            "page": page,
+        }
+        filters_json = json.dumps(filters_data, ensure_ascii=False)
         return f'''import json
 
 new_tab({url!r})
 wait_for_load()
-filters = {filters}
+filters = json.loads({filters_json!r})
 city_payload = js("""(() => {{
-  const label = {filters}.city;
+  const label = {filters_json}.city;
   const node = label ? [...document.querySelectorAll('a')]
     .find(item => (item.textContent || '').trim() === label) : null;
   return JSON.stringify({{href: node?.href || location.href}});
@@ -177,7 +190,7 @@ city_base = city_href.split("/ch10", 1)[0] + "/ch10"
 new_tab(city_base)
 wait_for_load()
 filter_payload = js("""(() => {{
-  const filters = {filters};
+  const filters = {filters_json};
   const find = (label) => {{
     if (!label || label === '智能') return null;
     const node = [...document.querySelectorAll('a')]
@@ -249,6 +262,8 @@ print(result)
             review_summary=cls._review_summary(text),
             source_url=str(item.get("source_url") or ""),
             source_fetched_at=cls._now(),
+            data_source="dianping",
+            data_source_status="live",
         )
 
     @staticmethod
@@ -336,6 +351,8 @@ print(result)
     def _address(text: str) -> str | None:
         for line in text.splitlines():
             value = line.strip()
+            if any(term in value for term in ("美团网", "ICP", "公网安备")):
+                continue
             if re.search(r"\d+号", value) and len(value) >= 6:
                 return value
         return None

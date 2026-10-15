@@ -24,6 +24,8 @@ class SampleRestaurantProvider:
             opening_hours="11:00-22:00",
             rating=4.5,
             review_summary="环境安静，意面口味稳定",
+            data_source="sample",
+            data_source_status="sample",
         ),
         Restaurant(
             name="Sakura Table",
@@ -35,6 +37,8 @@ class SampleRestaurantProvider:
             opening_hours="11:30-21:30",
             rating=4.7,
             review_summary="食材新鲜，适合约会",
+            data_source="sample",
+            data_source_status="sample",
         ),
         Restaurant(
             name="Chongqing Kitchen",
@@ -46,6 +50,8 @@ class SampleRestaurantProvider:
             opening_hours="10:30-22:30",
             rating=4.3,
             review_summary="口味偏辣，性价比高",
+            data_source="sample",
+            data_source_status="sample",
         ),
     ]
 

@@ -45,6 +45,14 @@ def test_parameter_extractor_extracts_requested_route_modes() -> None:
     ]
 
 
+def test_parameter_extractor_extracts_dianping_restaurant_url() -> None:
+    result = AgentParameterExtractor().extract(
+        "查询 https://www.dianping.com/shop/example 的推荐菜"
+    )
+
+    assert result.restaurant_url == "https://www.dianping.com/shop/example"
+
+
 def test_parameter_extractor_extracts_party_distance_and_page() -> None:
     result = AgentParameterExtractor().extract(
         "在北京找2家火锅，4个人，距离3公里以内，第2页"

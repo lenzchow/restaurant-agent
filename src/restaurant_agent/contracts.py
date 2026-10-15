@@ -3,6 +3,7 @@
 from restaurant_agent.domain.contracts import (
     ChatRequest,
     ChatResponse,
+    ConditionCandidates,
     ConfirmationDecision,
     Restaurant,
     RestaurantSearchInput,
@@ -14,6 +15,7 @@ from restaurant_agent.domain.contracts import (
 __all__ = [
     "ChatRequest",
     "ChatResponse",
+    "ConditionCandidates",
     "ConfirmationDecision",
     "Restaurant",
     "RestaurantSearchInput",

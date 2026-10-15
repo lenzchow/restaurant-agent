@@ -115,7 +115,7 @@
 ### Task 6: 真实联调和回归验证
 
 - [ ] 使用当前 Chrome 登录态联调大众点评定位、其他城市和商圈。
-- [ ] 使用 `.env` 中的高德 MCP 配置联调真实路线。
+- [x] 使用 `.env` 中的高德 MCP 配置联调真实路线。✅（北京站到天安门）
 - [ ] 使用 TeamRouter 执行 Responses API 端到端测试。
 - [ ] 执行全量离线测试、编译检查和 `git diff --check`。
 - [ ] 更新 `requirements_develop.md` 的完成状态。
