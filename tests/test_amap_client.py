@@ -61,6 +61,8 @@ async def test_client_searches_place_and_normalizes_route() -> None:
     assert route.taxi_duration_minutes == 30
     assert route.transit_duration_minutes == 40
     assert route.subway_lines == ["地铁10号线", "地铁5号线"]
+    assert route.transit_options[0].mode == "subway"
+    assert route.transit_options[0].duration_minutes == 40
     assert route.taxi_uri == "amapuri://route/take taxi"
     assert [name for name, _ in server.calls] == [
         "maps_text_search",

@@ -19,6 +19,12 @@ class ResponseStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class TransitOption(BaseModel):
+    mode: str
+    duration_minutes: int | None = Field(default=None, ge=0)
+    lines: list[str] = Field(default_factory=list)
+
+
 class RouteInfo(BaseModel):
     origin: str
     destination: str
@@ -29,6 +35,7 @@ class RouteInfo(BaseModel):
     taxi_uri: str | None = None
     subway_lines: list[str] = Field(default_factory=list)
     bus_lines: list[str] = Field(default_factory=list)
+    transit_options: list[TransitOption] = Field(default_factory=list)
     requested_modes: list[str] = Field(default_factory=list)
     unsupported_modes: list[str] = Field(default_factory=list)
     queried_at: str | None = None
@@ -81,6 +88,7 @@ class RestaurantSearchInput(BaseModel):
 class ConditionCandidates(BaseModel):
     max_budget: list[str] = Field(default_factory=list)
     max_distance_km: list[str] = Field(default_factory=list)
+    sort: list[str] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):

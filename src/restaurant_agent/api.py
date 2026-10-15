@@ -44,6 +44,9 @@ def create_default_agent_service(settings: Settings) -> RestaurantAgentService:
         amap_client=amap_client,
         dianping_provider=dianping_provider,
         route_enrichment=RouteEnrichmentService(amap_client) if amap_client else None,
+        session_db_path=settings.agent_session_db_path,
+        workflow_timeout_seconds=settings.agent_workflow_timeout_seconds,
+        max_workflow_steps=settings.agent_max_workflow_steps,
     )
 
 

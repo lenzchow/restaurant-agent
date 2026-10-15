@@ -8,6 +8,7 @@ from restaurant_agent.contracts import (
     ChatResponse,
     Restaurant,
     RestaurantSearchInput,
+    RouteInfo,
     Review,
 )
 from restaurant_agent.intents.models import IntentType
@@ -120,6 +121,18 @@ def test_restaurant_marks_each_field_source() -> None:
 
     assert restaurant.data_source == "dianping"
     assert restaurant.data_source_status == "live"
+
+
+def test_route_contains_separate_transit_options() -> None:
+    route = RouteInfo(
+        origin="起点",
+        destination="终点",
+        transit_options=[
+            {"mode": "subway", "duration_minutes": 40, "lines": ["地铁1号线"]}
+        ],
+    )
+
+    assert route.transit_options[0].mode == "subway"
 
 
 def test_restaurant_search_input_supports_dianping_filters_and_pagination() -> None:

@@ -66,3 +66,11 @@ def test_conflicting_budget_constraints_are_reported() -> None:
     result = KeywordIntentRecognizer().recognize("找人均不超过100元但至少300元的餐厅")
 
     assert result.conflicts
+
+
+def test_distance_conflict_is_reported() -> None:
+    result = KeywordIntentRecognizer().recognize(
+        "找距离不超过3公里但至少5公里的餐厅"
+    )
+
+    assert result.conflicts == ["minimum_distance_exceeds_maximum_distance"]

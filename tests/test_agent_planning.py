@@ -53,6 +53,13 @@ def test_parameter_extractor_extracts_dianping_restaurant_url() -> None:
     assert result.restaurant_url == "https://www.dianping.com/shop/example"
 
 
+def test_parameter_extractor_reports_confidence_and_unknown_fields() -> None:
+    result = AgentParameterExtractor().extract("找一家环境好一些的馆子")
+
+    assert result.confidence < 1
+    assert "sort" in result.unrecognized_fields
+
+
 def test_parameter_extractor_extracts_party_distance_and_page() -> None:
     result = AgentParameterExtractor().extract(
         "在北京找2家火锅，4个人，距离3公里以内，第2页"

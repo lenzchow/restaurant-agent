@@ -49,3 +49,13 @@ def test_confirm_returns_current_search_conditions() -> None:
     assert confirmed.city == "北京"
     assert confirmed.location == "海淀区"
     assert confirmed.max_budget == 100
+
+
+def test_ambiguous_environment_condition_returns_sort_choices() -> None:
+    manager = SearchConditionManager(AgentParameterExtractor())
+
+    update = manager.update("找一家环境好一些的餐厅")
+
+    assert update.candidates["sort"] == [
+        "rating", "popularity", "taste", "environment", "service", "booking"
+    ]

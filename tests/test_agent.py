@@ -269,6 +269,24 @@ async def test_query_route_marks_unsupported_requested_modes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_query_route_does_not_substitute_unsupported_mode() -> None:
+    class UnexpectedAmap:
+        async def route_between(self, *args, **kwargs):
+            raise AssertionError("unsupported mode must not call another route")
+
+    service = RestaurantAgentService(
+        provider=SampleRestaurantProvider(), amap_client=UnexpectedAmap()
+    )
+
+    route = await service.query_route(
+        "起点", "终点", modes=["bicycle"]
+    )
+
+    assert route.unsupported_modes == ["bicycle"]
+    assert route.driving_distance_km is None
+
+
+@pytest.mark.asyncio
 async def test_service_enriches_dianping_results_with_batch_routes() -> None:
     class FakeDianpingProvider:
         async def search_restaurants(self, request):
@@ -467,6 +485,40 @@ async def test_service_retains_workflow_context_for_follow_up_steps() -> None:
     context = service.get_workflow_context("context-test")
 
     assert context["recommendations"][0]["name"] == "测试店"
+
+
+@pytest.mark.asyncio
+async def test_service_returns_user_readable_timeout_message() -> None:
+    async def slow_runner(*args, **kwargs):
+        await asyncio.sleep(0.05)
+
+    service = RestaurantAgentService(
+        provider=SampleRestaurantProvider(),
+        runner=slow_runner,
+        workflow_timeout_seconds=0.001,
+    )
+
+    response = await service.answer(
+        ChatRequest(user_id="user-test", message="帮我找一家日料")
+    )
+
+    assert "超时" in response.message
+
+
+@pytest.mark.asyncio
+async def test_service_returns_user_readable_external_failure_message() -> None:
+    async def failing_runner(*args, **kwargs):
+        raise ConnectionError("provider unavailable")
+
+    service = RestaurantAgentService(
+        provider=SampleRestaurantProvider(), runner=failing_runner
+    )
+
+    response = await service.answer(
+        ChatRequest(user_id="user-test", message="帮我找一家日料")
+    )
+
+    assert "数据源" in response.message
 
 
 def test_service_asks_route_scope_for_multi_restaurant_request() -> None:

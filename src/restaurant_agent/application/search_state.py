@@ -26,6 +26,7 @@ class SearchConditionManager:
 
     _ambiguous_budget_terms = ("不要太贵", "别太贵", "便宜点", "实惠点")
     _ambiguous_distance_terms = ("离我近", "近一点", "附近")
+    _ambiguous_sort_terms = ("环境好一些", "环境好点", "服务好一些", "服务好点")
 
     def __init__(self, extractor: AgentParameterExtractor) -> None:
         self.extractor = extractor
@@ -99,6 +100,10 @@ class SearchConditionManager:
             candidates["max_budget"] = ["100", "200"]
         if any(term in message for term in cls._ambiguous_distance_terms):
             candidates["max_distance_km"] = ["3", "5", "10"]
+        if any(term in message for term in cls._ambiguous_sort_terms):
+            candidates["sort"] = [
+                "rating", "popularity", "taste", "environment", "service", "booking"
+            ]
         return candidates
 
     @staticmethod

@@ -10,6 +10,7 @@ from restaurant_agent.domain.contracts import (
     Review,
     ResponseStatus,
     RouteInfo,
+    TransitOption,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "Review",
     "ResponseStatus",
     "RouteInfo",
+    "TransitOption",
 ]

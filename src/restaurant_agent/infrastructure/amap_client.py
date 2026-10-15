@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from restaurant_agent.domain.contracts import RouteInfo
+from restaurant_agent.domain.contracts import RouteInfo, TransitOption
 
 
 class PlaceResult(BaseModel):
@@ -100,6 +100,23 @@ class AmapMCPClient:
         )
         driving_distance, driving_minutes = self._driving_values(driving)
         transit_minutes, subway_lines, bus_lines = self._transit_values(transit)
+        transit_options = []
+        if subway_lines:
+            transit_options.append(
+                TransitOption(
+                    mode="subway",
+                    duration_minutes=transit_minutes,
+                    lines=subway_lines,
+                )
+            )
+        if bus_lines:
+            transit_options.append(
+                TransitOption(
+                    mode="bus",
+                    duration_minutes=transit_minutes,
+                    lines=bus_lines,
+                )
+            )
         return RouteInfo(
             origin=origin.name,
             destination=destination.name,
@@ -112,6 +129,7 @@ class AmapMCPClient:
             taxi_uri=self._find_string(taxi, "uri", "url", "taxi_uri"),
             subway_lines=subway_lines,
             bus_lines=bus_lines,
+            transit_options=transit_options,
             queried_at=datetime.now(timezone.utc).isoformat(),
         )
 

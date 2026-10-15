@@ -45,6 +45,8 @@ class AgentParameterExtraction(BaseModel):
     route_origin: str | None = None
     route_destination: str | None = None
     route_modes: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=1, ge=0, le=1)
+    unrecognized_fields: list[str] = Field(default_factory=list)
 
 
 class AgentParameterExtractor:
@@ -81,6 +83,9 @@ class AgentParameterExtractor:
         party_size = self._number(text, r"(\d+)\s*个人")
         page = self._number(text, r"第\s*(\d+)\s*页")
         sort = next((value for label, value in self._sorts.items() if label in text), None)
+        unrecognized_fields = []
+        if any(term in text for term in ("环境好一些", "环境好点", "服务好一些", "服务好点")):
+            unrecognized_fields.append("sort")
         if city:
             values["city"] = city
         if location:
@@ -108,6 +113,8 @@ class AgentParameterExtractor:
             route_origin=origin,
             route_destination=destination,
             route_modes=route_modes,
+            confidence=0.75 if unrecognized_fields else 1.0,
+            unrecognized_fields=unrecognized_fields,
         )
 
     @staticmethod

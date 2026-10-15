@@ -52,6 +52,8 @@ class RestaurantAgentService:
         tool_router: ToolRouter | None = None,
         search_condition_manager: SearchConditionManager | None = None,
         session_db_path: str | None = None,
+        workflow_timeout_seconds: float = 60,
+        max_workflow_steps: int = 12,
     ) -> None:
         self.provider = provider
         self.runner = runner
@@ -69,6 +71,8 @@ class RestaurantAgentService:
         self.session_db_path = session_db_path or os.getenv(
             "AGENT_SESSION_DB_PATH", ":memory:"
         )
+        self.workflow_timeout_seconds = workflow_timeout_seconds
+        self.max_workflow_steps = max_workflow_steps
         self._sessions: dict[str, SQLiteSession] = {}
         self._workflow_context: dict[str, dict[str, Any]] = {}
         self.agent = Agent(
@@ -211,13 +215,21 @@ class RestaurantAgentService:
             raise RuntimeError("Amap route tool is not configured")
         requested_modes = list(dict.fromkeys(modes or ["driving", "taxi", "bus", "subway"]))
         supported_modes = {"driving", "taxi", "bus", "subway"}
+        unsupported_modes = [
+            mode for mode in requested_modes if mode not in supported_modes
+        ]
+        if unsupported_modes:
+            return RouteInfo(
+                origin=origin,
+                destination=destination,
+                requested_modes=requested_modes,
+                unsupported_modes=unsupported_modes,
+            )
         route = await self.amap_client.route_between(origin, destination, city=city)
         return route.model_copy(
             update={
                 "requested_modes": requested_modes,
-                "unsupported_modes": [
-                    mode for mode in requested_modes if mode not in supported_modes
-                ],
+                "unsupported_modes": [],
             }
         )
 
@@ -388,18 +400,8 @@ class RestaurantAgentService:
                 intent.route_destination,
                 modes=route_modes,
             )
-        if self.mcp_server is None:
-            result = await self._run(
-                request,
-                intent.model_dump(),
-                route,
-                search_request=search_request,
-                restaurant_name=restaurant_name,
-                restaurant_url=restaurant_url,
-                route_modes=route_modes,
-            )
-        else:
-            async with self.mcp_server:
+        try:
+            if self.mcp_server is None:
                 result = await self._run(
                     request,
                     intent.model_dump(),
@@ -409,6 +411,43 @@ class RestaurantAgentService:
                     restaurant_url=restaurant_url,
                     route_modes=route_modes,
                 )
+            else:
+                async with self.mcp_server:
+                    result = await self._run(
+                        request,
+                        intent.model_dump(),
+                        route,
+                        search_request=search_request,
+                        restaurant_name=restaurant_name,
+                        restaurant_url=restaurant_url,
+                        route_modes=route_modes,
+                    )
+        except asyncio.TimeoutError:
+            return ChatResponse(
+                conversation_id=request.conversation_id,
+                message="本次餐厅查询处理超时，请缩小范围后重试。",
+                status=ResponseStatus.COMPLETED,
+                intent=intent.intent,
+                intents=intent.intents,
+            )
+        except RuntimeError as exc:
+            if str(exc) == "workflow_step_limit_exceeded":
+                return ChatResponse(
+                    conversation_id=request.conversation_id,
+                    message="本次请求包含过多处理步骤，请拆成两次查询。",
+                    status=ResponseStatus.COMPLETED,
+                    intent=intent.intent,
+                    intents=intent.intents,
+                )
+            raise
+        except Exception:
+            return ChatResponse(
+                conversation_id=request.conversation_id,
+                message="当前外部数据源暂时不可用，请稍后重试。",
+                status=ResponseStatus.COMPLETED,
+                intent=intent.intent,
+                intents=intent.intents,
+            )
         output = result.final_output
         if isinstance(output, ChatResponse):
             updates = {"intent": output.intent or intent.intent}
@@ -489,6 +528,8 @@ class RestaurantAgentService:
         payload["recognized_intent"] = intent
         intent_result = IntentResult.model_validate(intent)
         workflow = self.tool_router.workflow(intent_result, route_modes=route_modes)
+        if len(workflow.steps) > self.max_workflow_steps:
+            raise RuntimeError("workflow_step_limit_exceeded")
         payload["agent_plan"] = {
             "actions": [action.value for action in self.tool_router.plan(intent_result)],
             "workflow": workflow.model_dump(),
@@ -506,8 +547,11 @@ class RestaurantAgentService:
             request.conversation_id,
             SQLiteSession(request.conversation_id, db_path=self.session_db_path),
         )
-        return await self.runner(
-            self.agent,
-            json.dumps(payload, ensure_ascii=False),
-            session=session,
+        return await asyncio.wait_for(
+            self.runner(
+                self.agent,
+                json.dumps(payload, ensure_ascii=False),
+                session=session,
+            ),
+            timeout=self.workflow_timeout_seconds,
         )

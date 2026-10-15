@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     mcp_bearer_token: str | None = None
     restaurant_provider: str = "dianping"
     browser_harness_executable: str = "browser-harness"
+    agent_session_db_path: str = ":memory:"
+    agent_workflow_timeout_seconds: float = 60
+    agent_max_workflow_steps: int = 12
     feishu_app_id: str | None = None
     feishu_app_secret: str | None = None
     feishu_api_base_url: str = "https://open.feishu.cn/open-apis"

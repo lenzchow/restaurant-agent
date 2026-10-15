@@ -131,8 +131,13 @@ class KeywordIntentRecognizer:
 
     @staticmethod
     def _find_conflicts(text: str) -> list[str]:
-        maximum = re.search(r"不超过\s*(\d+(?:\.\d+)?)", text)
-        minimum = re.search(r"至少\s*(\d+(?:\.\d+)?)", text)
+        maximum = re.search(r"(?:人均|预算)\s*(?:不超过|不高于)\s*(\d+(?:\.\d+)?)", text)
+        minimum = re.search(r"(?:人均|预算)?\s*至少\s*(\d+(?:\.\d+)?)(?!\s*公里)", text)
+        conflicts: list[str] = []
         if maximum and minimum and float(minimum.group(1)) > float(maximum.group(1)):
-            return ["minimum_budget_exceeds_maximum_budget"]
-        return []
+            conflicts.append("minimum_budget_exceeds_maximum_budget")
+        maximum_distance = re.search(r"距离\s*(?:不超过|不高于)\s*(\d+(?:\.\d+)?)\s*公里", text)
+        minimum_distance = re.search(r"(?:距离\s*)?至少\s*(\d+(?:\.\d+)?)\s*公里", text)
+        if maximum_distance and minimum_distance and float(minimum_distance.group(1)) > float(maximum_distance.group(1)):
+            conflicts.append("minimum_distance_exceeds_maximum_distance")
+        return conflicts
